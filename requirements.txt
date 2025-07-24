@@ -1,0 +1,7 @@
+Flask
+selenium-wire
+tqdm
+requests
+beautifulsoup4
+pickle5
+```

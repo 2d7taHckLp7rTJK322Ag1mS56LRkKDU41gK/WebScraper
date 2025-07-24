@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Scraper</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Social Media Scraper</h1>
+        <form action="/scrape" method="post">
+            <label for="platform">Select Platform:</label>
+            <select name="platform" id="platform" required>
+                <option value="instagram">Instagram</option>
+                <option value="threads">Threads</option>
+                <option value="facebook">Facebook</option>
+            </select>
+
+            <label for="user">Username:</label>
+            <input type="text" name="user" id="user" required>
+
+            <button type="submit">Scrape</button>
+        </form>
+
+        {% if results %}
+        <h2>Results:</h2>
+        <ul>
+            {% for result in results %}
+            <li>{{ result }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+</body>
+</html>
