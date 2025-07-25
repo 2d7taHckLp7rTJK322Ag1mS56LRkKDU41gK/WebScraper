@@ -3,11 +3,14 @@
 import os
 import shutil
 import glob
-from flask import Flask, render_template, jsonify, request, abort, redirect, url_for, flash
+# from flask import Flask, render_template, jsonify, request, abort, redirect, url_for, flash
+from flask import Flask, Response, render_template, jsonify, request, abort, redirect, url_for, flash
+import json
+import pickle
 from PIL import Image
 from functools import lru_cache
-from scraper.Scraper import InstagramScraper, ThreadsScraper, FacebookScraper
-
+# from scraper.Scraper import InstagramScraper, ThreadsScraper, FacebookScraper
+from scraper import InstagramScraper, ThreadsScraper, FacebookScraper
 app = Flask(__name__)
 app.secret_key = 'a_very_secret_key_please_change_me' # IMPORTANT: Change this key for production
 
@@ -118,6 +121,50 @@ def run_scraper():
         if scraper:
             scraper.close()
 
+# --- NEW: Real-time Scraper Stream Route ---
+@app.route('/scrape-stream')
+def scrape_stream():
+    platform = request.args.get('platform')
+    username = request.args.get('username', '').strip()
+
+    if not platform or not username:
+        # This check is more for direct access; JS validation is primary
+        return Response("Missing parameters", status=400)
+
+    def generate_events():
+        scraper = None
+        try:
+            # Determine which scraper to use
+            if platform == 'instagram':
+                scraper = InstagramScraper(headless=True, working_dir=BASE_DIR)
+            elif platform == 'threads':
+                scraper = ThreadsScraper(headless=True, working_dir=BASE_DIR)
+            elif platform == 'facebook':
+                scraper = FacebookScraper(headless=True, working_dir=BASE_DIR)
+            else:
+                # Yield a single error event and stop
+                error_event = json.dumps({"type": "error", "data": {"message": "Nền tảng không hợp lệ."}})
+                yield f"data: {error_event}\n\n"
+                return
+
+            # The scrape_users method is now a generator.
+            # We loop through its yielded events and stream them.
+            for event_data in scraper.scrape_users([username]):
+                yield f"data: {event_data}\n\n"
+            
+            # After scraping is done, clear the tree cache so the UI can update
+            api_tree.cache_clear()
+
+        except Exception as e:
+            print(f"Streaming Scraper Error: {e}")
+            error_event = json.dumps({"type": "error", "data": {"message": str(e)}})
+            yield f"data: {error_event}\n\n"
+        finally:
+            if scraper:
+                scraper.close()
+
+    # Return a streaming response
+    return Response(generate_events(), mimetype='text/event-stream')
 
 # --- API Routes for Labeling Tool ---
 @app.route('/api/content')
@@ -201,4 +248,4 @@ def assign_label():
     return jsonify({'moved': moved_count, 'errors': errors})
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    app.run(host='127.0.0.1', port=5000, debug=False)

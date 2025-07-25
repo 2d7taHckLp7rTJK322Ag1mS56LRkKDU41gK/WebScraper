@@ -1,34 +1,61 @@
 {% extends "layout.html" %}
 
-{% block title %}Cào dữ liệu{% endblock %}
+{% block title %}Cào dữ liệu - Real-time{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card shadow-sm">
+    <div class="col-md-8">
+        <!-- Input Form Card -->
+        <div class="card shadow-sm mb-4">
             <div class="card-header">
                 <h5 class="card-title mb-0"><i class="bi bi-cloud-download"></i> Cào dữ liệu từ Mạng xã hội</h5>
             </div>
             <div class="card-body">
-                <p class="card-text">Chọn nền tảng và nhập tên người dùng để bắt đầu cào dữ liệu ảnh. Dữ liệu sẽ được lưu vào `CloudStorage`.</p>
-                <form action="{{ url_for('run_scraper') }}" method="POST">
-                    <div class="mb-3">
-                        <label for="platformSelect" class="form-label">Nền tảng</label>
-                        <select class="form-select" id="platformSelect" name="platform" required>
-                            <option value="instagram">Instagram</option>
-                            <option value="threads">Threads</option>
-                            <option value="facebook">Facebook</option>
-                        </select>
+                <form id="scraper-form">
+                    <div class="row align-items-end">
+                        <div class="col-md-5 mb-2 mb-md-0">
+                            <label for="platformSelect" class="form-label">Nền tảng</label>
+                            <select class="form-select" id="platformSelect" name="platform" required>
+                                <option value="instagram">Instagram</option>
+                                <option value="threads">Threads</option>
+                                <option value="facebook">Facebook</option>
+                            </select>
+                        </div>
+                        <div class="col-md-5 mb-2 mb-md-0">
+                            <label for="usernameInput" class="form-label">Tên người dùng (Username)</label>
+                            <input type="text" class="form-control" id="usernameInput" name="username" placeholder="ví dụ: nasa" required>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" id="start-scrape-btn" class="btn btn-primary w-100">
+                                Cào
+                            </button>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label for="usernameInput" class="form-label">Tên người dùng (Username)</label>
-                        <input type="text" class="form-control" id="usernameInput" name="username" placeholder="ví dụ: nasa" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100">
-                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
-                        Bắt đầu cào
-                    </button>
                 </form>
+            </div>
+        </div>
+
+        <!-- Progress Display Card (Initially Hidden) -->
+        <div id="progress-container" class="card shadow-sm" style="display: none;">
+            <div class="card-header bg-white">
+                 <h5 class="card-title mb-0">Tiến trình</h5>
+            </div>
+            <div class="card-body">
+                <!-- Profile Info Section -->
+                <div id="profile-info" class="text-center border-bottom pb-3 mb-3" style="display: none;">
+                    <img id="profile-pic" src="" class="rounded-circle mb-2" alt="Profile Picture" style="width: 80px; height: 80px;">
+                    <h6 id="profile-name" class="mb-0"></h6>
+                    <small id="profile-id" class="text-muted"></small>
+                </div>
+                
+                <!-- Status and Progress Bar -->
+                <div class="d-flex justify-content-between align-items-center">
+                    <p id="progress-status" class="mb-1 text-muted"></p>
+                    <p id="progress-count" class="mb-1 fw-bold"></p>
+                </div>
+                <div class="progress" style="height: 10px;">
+                    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -36,12 +63,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-    // Thêm hiệu ứng loading cho nút bấm để người dùng biết tiến trình đang chạy
-    document.querySelector('form').addEventListener('submit', function() {
-        const button = this.querySelector('button[type="submit"]');
-        button.disabled = true;
-        button.querySelector('.spinner-border').classList.remove('d-none');
-    });
-</script>
+<script src="{{ url_for('static', filename='scraper_progress.js') }}"></script>
 {% endblock %}

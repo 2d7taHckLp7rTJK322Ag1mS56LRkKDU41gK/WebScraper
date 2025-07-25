@@ -30,7 +30,7 @@ out/
 # VSCode settings
 .vscode/
 
-
+cookies/*
 CloudStorage/*
 static/thumbnails/
 */__pycache__/
