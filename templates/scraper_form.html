@@ -1,0 +1,47 @@
+{% extends "layout.html" %}
+
+{% block title %}Cào dữ liệu{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="bi bi-cloud-download"></i> Cào dữ liệu từ Mạng xã hội</h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">Chọn nền tảng và nhập tên người dùng để bắt đầu cào dữ liệu ảnh. Dữ liệu sẽ được lưu vào `CloudStorage`.</p>
+                <form action="{{ url_for('run_scraper') }}" method="POST">
+                    <div class="mb-3">
+                        <label for="platformSelect" class="form-label">Nền tảng</label>
+                        <select class="form-select" id="platformSelect" name="platform" required>
+                            <option value="instagram">Instagram</option>
+                            <option value="threads">Threads</option>
+                            <option value="facebook">Facebook</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="usernameInput" class="form-label">Tên người dùng (Username)</label>
+                        <input type="text" class="form-control" id="usernameInput" name="username" placeholder="ví dụ: nasa" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        Bắt đầu cào
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Thêm hiệu ứng loading cho nút bấm để người dùng biết tiến trình đang chạy
+    document.querySelector('form').addEventListener('submit', function() {
+        const button = this.querySelector('button[type="submit"]');
+        button.disabled = true;
+        button.querySelector('.spinner-border').classList.remove('d-none');
+    });
+</script>
+{% endblock %}

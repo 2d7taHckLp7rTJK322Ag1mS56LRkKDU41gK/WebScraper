@@ -1,19 +1,19 @@
-// static/script.js (Đã cập nhật để chọn nhiều file và tối ưu)
+// static/script.js (Dành riêng cho trang công cụ gắn nhãn)
 
-// Why: Gom tất cả các biến trạng thái vào một object để dễ quản lý.
+// Gom tất cả các biến trạng thái vào một object để dễ quản lý.
 const appState = {
     currentPath: '',
     selectedImages: new Set(),
-    lastSelectedPath: null, // Why: Lưu lại ảnh cuối cùng được click để dùng cho Shift-select.
-    isMarqueeActive: false, // Why: Cờ trạng thái cho biết người dùng có đang kéo chuột chọn vùng hay không.
+    lastSelectedPath: null, // Lưu lại ảnh cuối cùng được click để dùng cho Shift-select.
+    isMarqueeActive: false, // Cờ trạng thái cho biết người dùng có đang kéo chuột chọn vùng hay không.
     marqueeStartX: 0,
     marqueeStartY: 0,
 };
 
-// Why: DOM elements được query một lần và lưu lại, tránh query lặp lại.
+// DOM elements được query một lần và lưu lại, tránh query lặp lại.
 const DOMElements = {
     treeContainer: document.getElementById('folderTree'),
-    gridWrapper: document.getElementById('imageGridWrapper'), // Why: Dùng wrapper để bắt sự kiện mousedown cho marquee
+    gridWrapper: document.getElementById('imageGridWrapper'), // Dùng wrapper để bắt sự kiện mousedown cho marquee
     gridContainer: document.getElementById('imageGrid'),
     labelButtonsContainer: document.getElementById('labelButtons'),
     breadcrumbContainer: document.getElementById('breadcrumbContainer'),
@@ -25,7 +25,7 @@ const DOMElements = {
 };
 
 // --- API Client ---
-// Why: Một hàm fetch tập trung giúp quản lý lỗi và loading dễ dàng.
+// Một hàm fetch tập trung giúp quản lý lỗi và loading dễ dàng.
 async function api(endpoint, options = {}) {
     try {
         const response = await fetch(endpoint, {
@@ -36,7 +36,11 @@ async function api(endpoint, options = {}) {
             const errorData = await response.json();
             throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
-        return response.json();
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+            return response.json();
+        }
+        return {};
     } catch (error) {
         showStatus(error.message, 'danger');
         throw error;
@@ -44,7 +48,6 @@ async function api(endpoint, options = {}) {
 }
 
 // --- Render Functions ---
-// Why: Tách riêng logic render ra các hàm nhỏ, dễ đọc và bảo trì.
 function renderTree(nodes, parentElement) {
     parentElement.innerHTML = '';
     nodes.forEach(node => {
@@ -66,10 +69,13 @@ function renderTree(nodes, parentElement) {
 }
 
 function renderContent({ images, labels, breadcrumbs }) {
-    // Render images
+    // **THAY ĐỔI**: Thêm a <div class="selection-indicator"> để hiển thị dấu tick.
     DOMElements.gridContainer.innerHTML = images.length
         ? images.map(img => `
             <div class="image-item" data-path="${img.path}">
+                <div class="selection-indicator">
+                    <i class="bi bi-check-circle-fill"></i>
+                </div>
                 <img src="${img.thumbnail}" alt="${img.name}" loading="lazy">
                 <div class="filename" title="${img.name}">${img.name}</div>
             </div>`).join('')
@@ -115,18 +121,17 @@ async function navigateToPath(path) {
     appState.selectedImages.clear();
     appState.lastSelectedPath = null;
 
-    // Update URL for better navigation history
     const url = new URL(window.location);
     url.searchParams.set('path', path);
     window.history.pushState({ path }, '', url);
 
-    // Highlight active tree node
     document.querySelectorAll('#folderTree .node-item.active').forEach(el => el.classList.remove('active'));
     document.querySelector(`#folderTree .node-item[data-path="${path}"]`)?.classList.add('active');
 
     try {
         const content = await api(`/api/content?path=${encodeURIComponent(path)}`);
         renderContent(content);
+        updateSelectionUI();
     } catch (e) { /* Lỗi đã được xử lý trong `api` */ }
 }
 
@@ -141,7 +146,6 @@ async function createLabel() {
         });
         DOMElements.newLabelInput.value = '';
         showStatus(data.message);
-        // Refresh tree and content
         await loadTree();
         await navigateToPath(appState.currentPath);
     } catch (e) { /* Lỗi đã được xử lý trong `api` */ }
@@ -165,7 +169,6 @@ async function assignToLabel(labelPath) {
             message += `\nLỗi: ${data.errors.join(', ')}`;
         }
         showStatus(message, data.errors.length > 0 ? 'warning' : 'success');
-        // Refresh tree and content after moving files
         await loadTree();
         await navigateToPath(appState.currentPath);
     } catch (e) { /* Lỗi đã được xử lý trong `api` */ }
@@ -177,6 +180,8 @@ function updateSelectionUI() {
     DOMElements.gridContainer.querySelectorAll('.image-item').forEach(item => {
         item.classList.toggle('selected', appState.selectedImages.has(item.dataset.path));
     });
+    // Thêm hoặc xóa class 'has-selection' trên grid container
+    DOMElements.gridContainer.classList.toggle('has-selection', appState.selectedImages.size > 0);
 }
 
 function handleImageClick(e) {
@@ -204,8 +209,13 @@ function handleImageClick(e) {
             : appState.selectedImages.add(path);
         appState.lastSelectedPath = path;
     } else {
-        appState.selectedImages.clear();
-        appState.selectedImages.add(path);
+        // Nếu chỉ click chuột và item này đã được chọn (và là item duy nhất được chọn)
+        if (appState.selectedImages.has(path) && appState.selectedImages.size === 1) {
+            appState.selectedImages.clear(); // Bỏ chọn nó
+        } else {
+            appState.selectedImages.clear();
+            appState.selectedImages.add(path);
+        }
         appState.lastSelectedPath = path;
     }
     updateSelectionUI();
@@ -253,6 +263,7 @@ function handleMarqueeEnd(e) {
     e.preventDefault();
     appState.isMarqueeActive = false;
     DOMElements.selectionOverlay.style.display = 'none';
+    updateSelectionUI(); // Cập nhật lại UI lần cuối
 }
 
 function updateSelectionFromMarquee() {
@@ -265,12 +276,10 @@ function updateSelectionFromMarquee() {
                                  overlayRect.top > itemRect.bottom);
         
         if (isIntersecting) {
-            if (!appState.selectedImages.has(item.dataset.path)) {
-                appState.selectedImages.add(item.dataset.path);
-                item.classList.add('selected');
-            }
+            appState.selectedImages.add(item.dataset.path);
         }
     });
+    updateSelectionUI();
 }
 
 
@@ -308,19 +317,19 @@ function setupEventListeners() {
 
 // --- Initialization ---
 function init() {
-    setupEventListeners();
-    const initialPath = new URLSearchParams(window.location.search).get('path') || '';
-    
-    // Load initial data
-    loadTree().then(() => {
-        navigateToPath(initialPath);
-    });
-    
-    // Handle browser back/forward buttons
-    window.addEventListener('popstate', e => {
-        const path = e.state?.path || '';
-        navigateToPath(path);
-    });
+    if (DOMElements.treeContainer && DOMElements.gridContainer) {
+        setupEventListeners();
+        const initialPath = new URLSearchParams(window.location.search).get('path') || '';
+        
+        loadTree().then(() => {
+            navigateToPath(initialPath);
+        });
+        
+        window.addEventListener('popstate', e => {
+            const path = e.state?.path || '';
+            navigateToPath(path);
+        });
+    }
 }
 
 document.addEventListener('DOMContentLoaded', init);
