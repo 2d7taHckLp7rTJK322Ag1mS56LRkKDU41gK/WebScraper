@@ -4,7 +4,6 @@ import time
 import pickle
 import re
 import base64
-import argparse
 from urllib.request import urlretrieve
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from seleniumwire import webdriver
@@ -46,10 +45,7 @@ class BaseScraper:
         return self.driver.execute_script("return document.readyState") == "complete"
     
     def _clean_driver_requests(self):
-        while len(self.driver.requests) > 0:
-            # Xóa tất cả các yêu cầu đã thực hiện để tránh tràn bộ nhớ
-            self.driver.requests.clear()
-            del self.driver.requests
+        del self.driver.requests
 
     def _load_cookies(self, cookie_file):
         """Tải cookie từ một tệp và thêm chúng vào phiên trình duyệt."""
@@ -68,65 +64,62 @@ class BaseScraper:
             pickle.dump(self.driver.get_cookies(), f)
     
     def _download_files(self, photos, download_dir, history_file):
-        """Tải xuống tệp bằng đa luồng.
-        Args:
-            photos (list): Danh sách các tuple chứa (image_url, post_url, taken_at).
-            download_dir (str): Thư mục để lưu các tệp đã tải xuống.
-            history_file (str): Tệp để lưu lịch sử tải xuống.
-        """
+        """Tải xuống tệp bằng đa luồng, bỏ qua các tệp đã tồn tại."""
         os.makedirs(download_dir, exist_ok=True)
         
         history = set()
         if os.path.exists(history_file):
             with open(history_file, "r") as f:
-                history = set(f.read().splitlines())
+                history = set(line.split(',')[0].strip() for line in f.read().splitlines())
 
-        def download_file(photo):
+        new_photos = [photo for photo in photos if photo[1] not in history]
+
+        if not new_photos:
+            yield self._yield_event("status", {"message": "Không có ảnh mới để tải xuống."})
+            return
+
+        yield self._yield_event("status", {"message": f"Bắt đầu tải xuống {len(new_photos)} tệp mới..."})
+
+        def download_and_record(photo):
             image_url, post_url, taken_at = photo
             filename = image_url.split("/")[-1].split('?')[0]
-
-            if filename in history:
-                return
-
-            filename = f"{datetime.fromtimestamp(taken_at).strftime("%Y%m%d_%H%M%S")}_{filename}" if taken_at else filename
+            filename = f"{datetime.fromtimestamp(taken_at).strftime('%Y%m%d_%H%M%S')}_{filename}" if taken_at else filename
             filepath = os.path.join(download_dir, filename)
-            if not os.path.exists(filepath):
-                urlretrieve(image_url, filepath)
             
-                with open(history_file, "a") as f:
-                    f.write(f"{post_url}, {filename}\n")
+            if not os.path.exists(filepath):
+                try:
+                    urlretrieve(image_url, filepath)
+                    with open(history_file, "a") as f:
+                        f.write(f"{post_url},{filename}\n")
+                except Exception as e:
+                    print(f"Lỗi khi tải {image_url}: {e}")
 
-        # Dùng tqdm để hiển thị tiến trình tải xuống
-        print(f"Đang tải xuống {len(photos)} tệp...")
         with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(download_file, photo) for photo in set(photos)]
+            futures = [executor.submit(download_and_record, photo) for photo in set(new_photos)]
             for _ in tqdm(as_completed(futures), total=len(futures), desc="Tải xuống", unit="tệp"):
                 pass
-    
+
     def _scroll_to_bottom(self):
         """Cuộn xuống cuối trang."""
         last_height = self.driver.execute_script("return document.body.scrollHeight")
         while True:
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(2)
-            # Yield progress after each scroll
             all_nodes = self._get_all_nodes()
             yield self._yield_event("progress", {"found": len(all_nodes)})
             new_height = self.driver.execute_script("return document.body.scrollHeight")
             if new_height == last_height:
                 break
             last_height = new_height
-        # Cuộn trở lại đầu trang
         self.driver.execute_script("window.scrollTo(0, 0);")  
 
         if not self._waiting_for_page_load():
             time.sleep(5)
-            return self._scroll_to_bottom()
+            yield from self._scroll_to_bottom()
 
     def close(self):
         """Đóng WebDriver."""
         self.driver.quit()
 
     def _get_all_nodes(self):
-        # This method needs to be implemented by each subclass
         raise NotImplementedError

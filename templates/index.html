@@ -11,21 +11,25 @@
 <body class="bg-light">
     <div class="container-fluid mt-3">
         <div class="row">
-            <div class="col-md-3">
+            <div class="col-lg-3">
                 <div class="card shadow-sm">
                     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-images"></i> ImageRelation Tool</span>
+                        <span class="fs-5"><i class="bi bi-images"></i> ImageRelation</span>
                         <div>
-                            <button id="openScraperBtn" class="btn btn-sm btn-info" title="Cào dữ liệu từ mạng xã hội"><i class="bi bi-cloud-download"></i> Scrape</button>
-                            <button id="reloadTreeBtn" class="btn btn-sm btn-outline-light" title="Tải lại cây thư mục"><i class="bi bi-arrow-clockwise"></i></button>
+                            <button id="openScraperBtn" class="btn btn-sm btn-info" title="Cào dữ liệu từ mạng xã hội">
+                                <i class="bi bi-cloud-download"></i> Scrape
+                            </button>
+                            <button id="reloadTreeBtn" class="btn btn-sm btn-outline-light" title="Tải lại cây thư mục">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
                         </div>
                     </div>
                     <div id="folderTree" class="tree-container p-2"></div>
                 </div>
             </div>
 
-            <div class="col-md-9">
-                <nav aria-label="breadcrumb" class="mb-3">
+            <div class="col-lg-9">
+                <nav aria-label="breadcrumb">
                     <ol id="breadcrumbContainer" class="breadcrumb"></ol>
                 </nav>
 
@@ -49,7 +53,6 @@
                 </div>
 
                 <div id="statusMessage" class="alert d-none mt-3" role="alert"></div>
-
                 <div id="imageGridWrapper">
                     <div id="imageGrid" class="image-grid"></div>
                 </div>
@@ -58,29 +61,51 @@
     </div>
 
     <div class="modal fade" id="scraperModal" tabindex="-1" aria-labelledby="scraperModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
+        <div class="modal-dialog modal-lg"> <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="scraperModalLabel"><i class="bi bi-cloud-download"></i> Cào dữ liệu từ Mạng xã hội</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="platformSelect" class="form-label">Nền tảng</label>
-                        <select class="form-select" id="platformSelect">
-                            <option value="instagram">Instagram</option>
-                            <option value="threads">Threads</option>
-                            <option value="facebook">Facebook</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label for="usernameInput" class="form-label">Tên người dùng (Username)</label>
-                        <input type="text" class="form-control" id="usernameInput" placeholder="ví dụ: nasa">
+                    <form id="scraper-form" class="mb-4">
+                        <div class="row align-items-end">
+                            <div class="col-md-5 mb-2 mb-md-0">
+                                <label for="platformSelect" class="form-label">Nền tảng</label>
+                                <select class="form-select" id="platformSelect" name="platform" required>
+                                    <option value="instagram">Instagram</option>
+                                    <option value="threads">Threads</option>
+                                    <option value="facebook">Facebook</option>
+                                </select>
+                            </div>
+                            <div class="col-md-5 mb-2 mb-md-0">
+                                <label for="usernameInput" class="form-label">Tên người dùng (Username)</label>
+                                <input type="text" class="form-control" id="usernameInput" name="username" placeholder="ví dụ: nasa" required>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" id="start-scrape-btn" class="btn btn-primary w-100">Cào</button>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <div id="progress-container" class="card" style="display: none;">
+                        <div class="card-body">
+                            <div id="profile-info" class="text-center border-bottom pb-3 mb-3" style="display: none;">
+                                <img id="profile-pic" src="" class="rounded-circle mb-2" alt="Profile Picture" style="width: 80px; height: 80px;">
+                                <h6 id="profile-name" class="mb-0"></h6>
+                                <small id="profile-id" class="text-muted"></small>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <p id="progress-status" class="mb-0 text-muted"></p>
+                                <p id="progress-count" class="mb-0 fw-bold"></p>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
-                    <button type="button" id="startScrapeBtn" class="btn btn-primary">Bắt đầu cào</button>
                 </div>
             </div>
         </div>
@@ -90,5 +115,6 @@
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='script.js') }}" type="module"></script>
+    <script src="{{ url_for('static', filename='scraper_progress.js') }}"></script>
 </body>
 </html>

@@ -168,4 +168,3 @@ class FacebookScraper(BaseScraper):
                 data = json.loads(decode(response.body, response.headers.get('Content-Encoding', 'identity')))
                 all_nodes.extend(data['data']['node']['pageItems']['edges'])
         return all_nodes
-

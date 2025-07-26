@@ -1,19 +1,19 @@
-// static/script.js (Dành riêng cho trang công cụ gắn nhãn)
+// static/script.js (Dành riêng cho trang công cụ gắn nhãn và quản lý modal)
 
 // Gom tất cả các biến trạng thái vào một object để dễ quản lý.
 const appState = {
     currentPath: '',
     selectedImages: new Set(),
-    lastSelectedPath: null, // Lưu lại ảnh cuối cùng được click để dùng cho Shift-select.
-    isMarqueeActive: false, // Cờ trạng thái cho biết người dùng có đang kéo chuột chọn vùng hay không.
+    lastSelectedPath: null,
+    isMarqueeActive: false,
     marqueeStartX: 0,
     marqueeStartY: 0,
 };
 
-// DOM elements được query một lần và lưu lại, tránh query lặp lại.
+// DOM elements được query một lần và lưu lại.
 const DOMElements = {
     treeContainer: document.getElementById('folderTree'),
-    gridWrapper: document.getElementById('imageGridWrapper'), // Dùng wrapper để bắt sự kiện mousedown cho marquee
+    gridWrapper: document.getElementById('imageGridWrapper'),
     gridContainer: document.getElementById('imageGrid'),
     labelButtonsContainer: document.getElementById('labelButtons'),
     breadcrumbContainer: document.getElementById('breadcrumbContainer'),
@@ -22,10 +22,11 @@ const DOMElements = {
     createLabelBtn: document.getElementById('createLabelBtn'),
     reloadTreeBtn: document.getElementById('reloadTreeBtn'),
     selectionOverlay: document.getElementById('selectionOverlay'),
+    openScraperBtn: document.getElementById('openScraperBtn'),
+    scraperModal: new bootstrap.Modal(document.getElementById('scraperModal')),
 };
 
 // --- API Client ---
-// Một hàm fetch tập trung giúp quản lý lỗi và loading dễ dàng.
 async function api(endpoint, options = {}) {
     try {
         const response = await fetch(endpoint, {
@@ -69,19 +70,15 @@ function renderTree(nodes, parentElement) {
 }
 
 function renderContent({ images, labels, breadcrumbs }) {
-    // **THAY ĐỔI**: Thêm a <div class="selection-indicator"> để hiển thị dấu tick.
     DOMElements.gridContainer.innerHTML = images.length
         ? images.map(img => `
             <div class="image-item" data-path="${img.path}">
-                <div class="selection-indicator">
-                    <i class="bi bi-check-circle-fill"></i>
-                </div>
+                <div class="selection-indicator"><i class="bi bi-check-circle-fill"></i></div>
                 <img src="${img.thumbnail}" alt="${img.name}" loading="lazy">
                 <div class="filename" title="${img.name}">${img.name}</div>
             </div>`).join('')
         : '<div class="text-center text-muted p-5">Thư mục trống</div>';
 
-    // Render labels
     DOMElements.labelButtonsContainer.innerHTML = labels.length
         ? labels.map(label => `
             <button class="btn btn-outline-primary btn-sm" data-path="${label.path}" title="Gán vào: ${label.name}">
@@ -89,16 +86,10 @@ function renderContent({ images, labels, breadcrumbs }) {
             </button>`).join('')
         : '<span class="text-muted small">Chưa có nhãn con</span>';
 
-    // Render breadcrumbs
     DOMElements.breadcrumbContainer.innerHTML = `
-        <li class="breadcrumb-item"><a href="#" data-path="">
-            <i class="bi bi-house-door"></i> Home</a>
-        </li>
-        ${breadcrumbs.map(b => `
-            <li class="breadcrumb-item"><a href="#" data-path="${b.path}">${b.name}</a></li>
-        `).join('')}`;
+        <li class="breadcrumb-item"><a href="#" data-path=""><i class="bi bi-house-door"></i> Home</a></li>
+        ${breadcrumbs.map(b => `<li class="breadcrumb-item"><a href="#" data-path="${b.path}">${b.name}</a></li>`).join('')}`;
 }
-
 
 // --- Main Logic & UI Feedback ---
 function showStatus(message, type = 'success', duration = 3000) {
@@ -113,32 +104,28 @@ async function loadTree() {
     try {
         const treeData = await api('/api/tree');
         renderTree(treeData, DOMElements.treeContainer);
-    } catch (e) { /* Lỗi đã được xử lý trong `api` */ }
+    } catch (e) { /* Error handled in `api` */ }
 }
 
 async function navigateToPath(path) {
     appState.currentPath = path;
     appState.selectedImages.clear();
     appState.lastSelectedPath = null;
-
     const url = new URL(window.location);
     url.searchParams.set('path', path);
     window.history.pushState({ path }, '', url);
-
     document.querySelectorAll('#folderTree .node-item.active').forEach(el => el.classList.remove('active'));
     document.querySelector(`#folderTree .node-item[data-path="${path}"]`)?.classList.add('active');
-
     try {
         const content = await api(`/api/content?path=${encodeURIComponent(path)}`);
         renderContent(content);
         updateSelectionUI();
-    } catch (e) { /* Lỗi đã được xử lý trong `api` */ }
+    } catch (e) { /* Error handled in `api` */ }
 }
 
 async function createLabel() {
     const name = DOMElements.newLabelInput.value.trim();
     if (!name) return showStatus('Vui lòng nhập tên nhãn', 'warning');
-
     try {
         const data = await api('/api/create_label', {
             method: 'POST',
@@ -148,14 +135,13 @@ async function createLabel() {
         showStatus(data.message);
         await loadTree();
         await navigateToPath(appState.currentPath);
-    } catch (e) { /* Lỗi đã được xử lý trong `api` */ }
+    } catch (e) { /* Error handled in `api` */ }
 }
 
 async function assignToLabel(labelPath) {
     if (appState.selectedImages.size === 0) {
         return showStatus('Chưa chọn ảnh nào.', 'warning');
     }
-
     try {
         const data = await api('/api/assign_label', {
             method: 'POST',
@@ -165,53 +151,38 @@ async function assignToLabel(labelPath) {
             }),
         });
         let message = `Đã di chuyển ${data.moved} ảnh.`;
-        if (data.errors.length > 0) {
-            message += `\nLỗi: ${data.errors.join(', ')}`;
-        }
+        if (data.errors.length > 0) message += `\nLỗi: ${data.errors.join(', ')}`;
         showStatus(message, data.errors.length > 0 ? 'warning' : 'success');
         await loadTree();
         await navigateToPath(appState.currentPath);
-    } catch (e) { /* Lỗi đã được xử lý trong `api` */ }
+    } catch (e) { /* Error handled in `api` */ }
 }
-
 
 // --- SELECTION LOGIC ---
 function updateSelectionUI() {
     DOMElements.gridContainer.querySelectorAll('.image-item').forEach(item => {
         item.classList.toggle('selected', appState.selectedImages.has(item.dataset.path));
     });
-    // Thêm hoặc xóa class 'has-selection' trên grid container
     DOMElements.gridContainer.classList.toggle('has-selection', appState.selectedImages.size > 0);
 }
 
 function handleImageClick(e) {
     const item = e.target.closest('.image-item');
     if (!item) return;
-
     const path = item.dataset.path;
     const allItems = Array.from(DOMElements.gridContainer.querySelectorAll('.image-item'));
-
     if (e.shiftKey && appState.lastSelectedPath) {
         const lastIdx = allItems.findIndex(el => el.dataset.path === appState.lastSelectedPath);
         const currentIdx = allItems.indexOf(item);
-        
-        if (!e.ctrlKey) {
-            appState.selectedImages.clear();
-        }
-
+        if (!e.ctrlKey) appState.selectedImages.clear();
         const [start, end] = [Math.min(lastIdx, currentIdx), Math.max(lastIdx, currentIdx)];
-        for (let i = start; i <= end; i++) {
-            appState.selectedImages.add(allItems[i].dataset.path);
-        }
+        for (let i = start; i <= end; i++) appState.selectedImages.add(allItems[i].dataset.path);
     } else if (e.ctrlKey) {
-        appState.selectedImages.has(path)
-            ? appState.selectedImages.delete(path)
-            : appState.selectedImages.add(path);
+        appState.selectedImages.has(path) ? appState.selectedImages.delete(path) : appState.selectedImages.add(path);
         appState.lastSelectedPath = path;
     } else {
-        // Nếu chỉ click chuột và item này đã được chọn (và là item duy nhất được chọn)
         if (appState.selectedImages.has(path) && appState.selectedImages.size === 1) {
-            appState.selectedImages.clear(); // Bỏ chọn nó
+            appState.selectedImages.clear();
         } else {
             appState.selectedImages.clear();
             appState.selectedImages.add(path);
@@ -224,18 +195,17 @@ function handleImageClick(e) {
 function handleMarqueeStart(e) {
     if (e.target.closest('.image-item')) return;
     e.preventDefault();
-
     appState.isMarqueeActive = true;
     appState.marqueeStartX = e.clientX;
     appState.marqueeStartY = e.clientY;
-
     const rect = DOMElements.gridWrapper.getBoundingClientRect();
-    DOMElements.selectionOverlay.style.left = `${e.clientX - rect.left}px`;
-    DOMElements.selectionOverlay.style.top = `${e.clientY - rect.top}px`;
-    DOMElements.selectionOverlay.style.width = '0px';
-    DOMElements.selectionOverlay.style.height = '0px';
-    DOMElements.selectionOverlay.style.display = 'block';
-
+    Object.assign(DOMElements.selectionOverlay.style, {
+        left: `${e.clientX - rect.left}px`,
+        top: `${e.clientY - rect.top}px`,
+        width: '0px',
+        height: '0px',
+        display: 'block'
+    });
     if (!e.ctrlKey) {
         appState.selectedImages.clear();
         updateSelectionUI();
@@ -245,16 +215,15 @@ function handleMarqueeStart(e) {
 function handleMarqueeMove(e) {
     if (!appState.isMarqueeActive) return;
     e.preventDefault();
-
     const rect = DOMElements.gridWrapper.getBoundingClientRect();
     const width = e.clientX - appState.marqueeStartX;
     const height = e.clientY - appState.marqueeStartY;
-
-    DOMElements.selectionOverlay.style.width = `${Math.abs(width)}px`;
-    DOMElements.selectionOverlay.style.height = `${Math.abs(height)}px`;
-    DOMElements.selectionOverlay.style.left = `${(width > 0 ? appState.marqueeStartX : e.clientX) - rect.left}px`;
-    DOMElements.selectionOverlay.style.top = `${(height > 0 ? appState.marqueeStartY : e.clientY) - rect.top}px`;
-    
+    Object.assign(DOMElements.selectionOverlay.style, {
+        width: `${Math.abs(width)}px`,
+        height: `${Math.abs(height)}px`,
+        left: `${(width > 0 ? appState.marqueeStartX : e.clientX) - rect.left}px`,
+        top: `${(height > 0 ? appState.marqueeStartY : e.clientY) - rect.top}px`
+    });
     updateSelectionFromMarquee();
 }
 
@@ -263,25 +232,18 @@ function handleMarqueeEnd(e) {
     e.preventDefault();
     appState.isMarqueeActive = false;
     DOMElements.selectionOverlay.style.display = 'none';
-    updateSelectionUI(); // Cập nhật lại UI lần cuối
+    updateSelectionUI();
 }
 
 function updateSelectionFromMarquee() {
     const overlayRect = DOMElements.selectionOverlay.getBoundingClientRect();
     DOMElements.gridContainer.querySelectorAll('.image-item').forEach(item => {
         const itemRect = item.getBoundingClientRect();
-        const isIntersecting = !(overlayRect.right < itemRect.left || 
-                                 overlayRect.left > itemRect.right || 
-                                 overlayRect.bottom < itemRect.top || 
-                                 overlayRect.top > itemRect.bottom);
-        
-        if (isIntersecting) {
-            appState.selectedImages.add(item.dataset.path);
-        }
+        const isIntersecting = !(overlayRect.right < itemRect.left || overlayRect.left > itemRect.right || overlayRect.bottom < itemRect.top || overlayRect.top > itemRect.bottom);
+        if (isIntersecting) appState.selectedImages.add(item.dataset.path);
     });
     updateSelectionUI();
 }
-
 
 // --- Event Listeners Setup ---
 function setupEventListeners() {
@@ -289,30 +251,31 @@ function setupEventListeners() {
         const nodeItem = e.target.closest('.node-item');
         if (nodeItem) navigateToPath(nodeItem.dataset.path);
     });
-
     DOMElements.breadcrumbContainer.addEventListener('click', e => {
         e.preventDefault();
         const link = e.target.closest('a[data-path]');
         if (link) navigateToPath(link.dataset.path);
     });
-    
     DOMElements.labelButtonsContainer.addEventListener('click', e => {
         const button = e.target.closest('button[data-path]');
-        if(button) assignToLabel(button.dataset.path);
+        if (button) assignToLabel(button.dataset.path);
     });
-
     DOMElements.createLabelBtn.addEventListener('click', createLabel);
     DOMElements.newLabelInput.addEventListener('keyup', e => {
         if (e.key === 'Enter') createLabel();
     });
-
     DOMElements.reloadTreeBtn.addEventListener('click', loadTree);
-
-    // Selection Event Listeners
+    DOMElements.openScraperBtn.addEventListener('click', () => DOMElements.scraperModal.show());
     DOMElements.gridContainer.addEventListener('click', handleImageClick);
     DOMElements.gridWrapper.addEventListener('mousedown', handleMarqueeStart);
     document.addEventListener('mousemove', handleMarqueeMove);
     document.addEventListener('mouseup', handleMarqueeEnd);
+    
+    // Listen for the custom event from scraper_progress.js
+    document.addEventListener('scrapeComplete', () => {
+        console.log('Scrape complete! Reloading tree...');
+        loadTree();
+    });
 }
 
 // --- Initialization ---
@@ -320,15 +283,8 @@ function init() {
     if (DOMElements.treeContainer && DOMElements.gridContainer) {
         setupEventListeners();
         const initialPath = new URLSearchParams(window.location.search).get('path') || '';
-        
-        loadTree().then(() => {
-            navigateToPath(initialPath);
-        });
-        
-        window.addEventListener('popstate', e => {
-            const path = e.state?.path || '';
-            navigateToPath(path);
-        });
+        loadTree().then(() => navigateToPath(initialPath));
+        window.addEventListener('popstate', e => navigateToPath(e.state?.path || ''));
     }
 }
 
